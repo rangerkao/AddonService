@@ -44,7 +44,8 @@ public class AddonService {
 			
 		//設定目的路徑
 		//path=System.getProperty("user.dir"); 
-		path="/CDR/script/tool/GPRS_flatrate/AddonServerProgramTest";
+		//path="/CDR/script/tool/GPRS_flatrate/AddonServerProgramTest";
+		path="/CDR/script/tool/GPRS_flatrate/inputfile";
 		String tempFileDir="";
 		
 		if(tempFileDir!=null&&"".equals(tempFileDir))
