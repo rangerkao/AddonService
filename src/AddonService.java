@@ -55,27 +55,25 @@ public class AddonService {
 		
 		boolean exit=false;
 		
-
-		while(!exit){
-			String s = sdf.format(new Date());
-			logger.info("Program check point..."+new Date());
-			if("0010".equals(s)){
-				logger.info("Proccess start:");
-				
-				//確認目標資料夾內容
-				try {
-					checkFile();
-				} catch (Exception e) {
-					ErrorHandle("",e);
-					return;
+		//20151105調整by參數數量決定執行時間，無參數則為立即性一次啟動
+		if(args.length==0){
+			proccess();
+		}else{
+			String runTime = args[0];
+			
+			logger.info("Set run time at "+runTime+"(hh24mi)");
+			
+			while(!exit){
+				String s = sdf.format(new Date());
+				logger.info("Program check point..."+new Date());
+				if(runTime.equals(s)){
+					proccess();
 				}
-				//撈取資料
-				selectData();
-				logger.info("Proccess end.");
-				sendMail("AddonServer Program Finished at "+new Date());
+				waiting(waitingTime);
 			}
-			waiting(waitingTime);
 		}
+		
+		
 	}
 	
 	public static void waiting(long time){
@@ -83,6 +81,22 @@ public class AddonService {
 			Thread.sleep(time);
 		} catch (InterruptedException e) {
 		}
+	}
+	
+	public static void proccess(){
+		logger.info("Proccess start:");
+				
+		//確認目標資料夾內容
+		try {
+			checkFile();
+		} catch (Exception e) {
+			ErrorHandle("",e);
+			return;
+		}
+		//撈取資料
+		selectData();
+		logger.info("Proccess end.");
+		sendMail("AddonServer Program Finished at "+new Date());
 	}
 
 	public static void checkFile() throws Exception{
@@ -305,7 +319,7 @@ public class AddonService {
 		try{
 			Process p = Runtime.getRuntime().exec (cmd);
 			p.waitFor();
-			System.out.println("send mail cmd:"+cmd);
+			System.out.println("send mail cmd:"+cmd[0]+" "+cmd[1]+" "+cmd[2]);
 		}catch (Exception e){
 			System.out.println("send mail fail:"+msg);
 		}
