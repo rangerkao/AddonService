@@ -31,6 +31,9 @@ public class AddonService {
 	static SimpleDateFormat sdf = new SimpleDateFormat("HHmm");
 	static SimpleDateFormat sdf2 = new SimpleDateFormat("yyyyMMdd");
 	static long waitingTime = 60*1000;
+	static int cMove = 0;
+	static int cCreate = 0;
+	static int cCheck = 0;
 	
 	public static void main(String[] args){
 
@@ -46,6 +49,8 @@ public class AddonService {
 		//path=System.getProperty("user.dir"); 
 		//path="/CDR/script/tool/GPRS_flatrate/AddonServerProgramTest";
 		path="/CDR/script/tool/GPRS_flatrate/inputfile";
+		//TODO
+		path="C:/Users/ranger.kao/Desktop/1104Addon";
 		String tempFileDir="";
 		
 		if(tempFileDir!=null&&"".equals(tempFileDir))
@@ -85,21 +90,23 @@ public class AddonService {
 	
 	public static void proccess(){
 		logger.info("Proccess start:");
-				
-		//確認目標資料夾內容
 		try {
+			//確認目標資料夾內容
 			checkFile();
+			//撈取資料
+			selectData();
+			//確認資料數量
+			reCheckFile();
 		} catch (Exception e) {
 			ErrorHandle("",e);
 			return;
 		}
-		//撈取資料
-		selectData();
 		logger.info("Proccess end.");
 		sendMail("AddonServer Program Finished at "+new Date());
 	}
 
 	public static void checkFile() throws Exception{
+		cMove = 0;
 		Calendar c = Calendar.getInstance();
 		c.set(Calendar.DAY_OF_YEAR, c.get(Calendar.DAY_OF_YEAR)-1);
 		String nFolder=sdf2.format(c.getTime());
@@ -121,12 +128,13 @@ public class AddonService {
 				
 					if(moveFile(path,nFolderPath,f.getName())){
 						//logger.info("move "+f.getName()+" to "+nFolder);
+						cMove += 1;
 					}else{
 						throw new Exception("move "+f.getName()+" from "+path+" to "+nFolderPath+" fail!");
 					}
 				}
 			}
-			logger.info("Check move file end...");
+			logger.info("Check move file end...(total moved "+cMove+" files)");
 		}else if(tempDir.isFile()){
 			logger.info("is file!");
 			throw new Exception("Dir is Not correct!");
@@ -143,6 +151,7 @@ public class AddonService {
 	}
 	
 	public static void selectData(){
+		cCreate = 0;
 		logger.info("Select Data...");
 
 		Connection conn = null;
@@ -160,6 +169,11 @@ public class AddonService {
 			sql = "SELECT A.S2TIMSI,A.SERVICECODE,A.STATUS,CASE  WHEN A.STARTDATE< TRUNC(SYSDATE)-60 THEN to_char(TRUNC(SYSDATE)-60,'yyyyMMdd') ELSE to_char(A.STARTDATE,'yyyyMMdd') END STARTDATE , to_char(TRUNC(SYSDATE)-1,'yyyyMMdd') ENDDATE,to_char(A.STARTDATE,'yyyyMMdd') APPLYDATE "
 					+ "FROM ADDONSERVICE_N A "
 					+ "WHERE (A.ENDDATE IS NULL OR A.ENDDATE> TRUNC(SYSDATE)-60) AND STATUS ='A'";
+			
+			//20151215 測試指令
+			/*sql = "SELECT A.S2TIMSI,A.SERVICECODE,A.STATUS,CASE  WHEN A.STARTDATE< TRUNC(to_date('2015/11/04','yyyy/MM/dd'))-60 THEN to_char(TRUNC(to_date('2015/11/04','yyyy/MM/dd'))-60,'yyyyMMdd') ELSE to_char(A.STARTDATE,'yyyyMMdd') END STARTDATE , to_char(TRUNC(to_date('2015/11/04','yyyy/MM/dd'))-1,'yyyyMMdd') ENDDATE,to_char(A.STARTDATE,'yyyyMMdd') APPLYDATE "
+					+ "FROM ADDONSERVICE_N A "
+					+ "WHERE (A.ENDDATE IS NULL OR A.ENDDATE> TRUNC(to_date('2015/11/04','yyyy/MM/dd'))-60) AND STATUS ='A' AND A.STARTDATE<TO_DATE('2015/11/04','yyyy/MM/dd')";*/
 
 			rs = st.executeQuery(sql);
 			logger.info("select status A :"+sql);
@@ -168,6 +182,7 @@ public class AddonService {
 				createFile(rs.getString("S2TIMSI"),rs.getString("SERVICECODE"),rs.getString("STATUS"),rs.getString("STARTDATE"),rs.getString("ENDDATE"),rs.getString("APPLYDATE"));
 			}
 			
+			rs.close();
 			rs=null;
 
 			//select D
@@ -175,6 +190,10 @@ public class AddonService {
 					+ "FROM ADDONSERVICE_N A "
 					+ "WHERE (A.ENDDATE IS NULL OR A.ENDDATE>= TRUNC(SYSDATE)-60) AND STATUS ='D'";
 			
+			//20151215 測試指令
+			/*sql = "SELECT A.S2TIMSI,A.SERVICECODE,A.STATUS, to_char(TRUNC(to_date('2015/11/04','yyyy/MM/dd'))-60,'yyyyMMdd') STARTDATE , to_char(A.ENDDATE,'yyyyMMdd') ENDDATE,to_char(A.STARTDATE,'yyyyMMdd') APPLYDATE "
+					+ "FROM ADDONSERVICE_N A "
+					+ "WHERE (A.ENDDATE IS NULL OR A.ENDDATE> TRUNC(to_date('2015/11/04','yyyy/MM/dd'))-60) AND STATUS ='D' AND A.STARTDATE<TO_DATE('2015/11/04','yyyy/MM/dd')";*/
 			rs = st.executeQuery(sql);
 			logger.info("select status D :"+sql);
 			
@@ -193,9 +212,42 @@ public class AddonService {
 					rs.close();
 			} catch (SQLException e) {
 			}
+			logger.info("total ceated "+cCreate+" files.");
 		}
 	}
-	
+	public static void reCheckFile() throws Exception{
+		logger.info("reCheck File...");
+		cCheck = 0;
+
+		File tempDir = new File(path);
+		//確認路徑的位置類型
+		if(tempDir.isDirectory()){
+			logger.info("is folder!");
+			//是否含有AddServer的資料
+			File [] fl = tempDir.listFiles();
+
+			logger.info("Check move file...");
+			for(int i = 0 ; i<fl.length ; i++){
+				File f = fl[i];
+				if(f.getName().indexOf("AddServer")!=-1){
+					cCheck +=1;
+				}
+			}
+			logger.info("Have "+cCheck+" files in folder.");
+			
+			if(cCheck!=cCreate)
+				throw new Exception("Created file number not match existed file number!");
+				
+				
+		}else if(tempDir.isFile()){
+			logger.info("is file!");
+			throw new Exception("Dir is Not correct!");
+		}else{
+			logger.info("unknowm!");
+			throw new Exception("Dir is Not correct!");
+		}
+		
+	}
 	public static void createFile(String IMSI,String SERVICECODE,String STATUS,String STARTDATE,String ENDDATE,String APPLYDATE){
 
 		String fileName = "AddServer."+SERVICECODE.substring(2)+"."+IMSI+"."+APPLYDATE+".txt";
@@ -208,6 +260,7 @@ public class AddonService {
 			f.createNewFile();
 			fw = new BufferedWriter(new OutputStreamWriter(new FileOutputStream(f, true), "UTF-8"));
 			fw.write(fileCont);
+			cCreate += 1;
 		} catch (UnsupportedEncodingException e) {
 			ErrorHandle("Create File error",e);
 		} catch (FileNotFoundException e) {
