@@ -32,8 +32,11 @@ public class AddonService {
 	static SimpleDateFormat sdf2 = new SimpleDateFormat("yyyyMMdd");
 	static long waitingTime = 60*1000;
 	static int cMove = 0;
+	static int cA = 0;
+	static int cD = 0;
 	static int cCreate = 0;
 	static int cCheck = 0;
+	static int beforeDay = 60;
 	
 	public static void main(String[] args){
 
@@ -101,7 +104,18 @@ public class AddonService {
 			return;
 		}
 		logger.info("Proccess end.");
-		sendMail("AddonServer Program Finished at "+new Date());
+		Calendar c = Calendar.getInstance();
+		c.set(Calendar.DAY_OF_YEAR, c.get(Calendar.DAY_OF_YEAR)-beforeDay+1);
+		c.set(Calendar.HOUR_OF_DAY, 0);
+		c.set(Calendar.MINUTE, 0);
+		c.set(Calendar.SECOND, 0);
+		
+		String mails = "AddonServer Program Finished at "+new Date()+".\n"
+				+ "Date from "+c.getTime()+"~"+new Date()+".\n"
+				+ "Created status A "+cA+".\n"
+				+ "Created status D "+cD+".\n"
+				+ "Total "+cCreate+".";		
+		sendMail(mails);
 	}
 
 	public static void checkFile() throws Exception{
@@ -151,6 +165,8 @@ public class AddonService {
 	
 	public static void selectData(){
 		cCreate = 0;
+		cA = 0;
+		cD = 0;
 		logger.info("Select Data...");
 
 		Connection conn = null;
@@ -165,14 +181,14 @@ public class AddonService {
 			
 			st = conn.createStatement();
 			//select A
-			sql = "SELECT A.S2TIMSI,A.SERVICECODE,A.STATUS,CASE  WHEN A.STARTDATE< TRUNC(SYSDATE)-60 THEN to_char(TRUNC(SYSDATE)-60,'yyyyMMdd') ELSE to_char(A.STARTDATE,'yyyyMMdd') END STARTDATE , to_char(TRUNC(SYSDATE)-1,'yyyyMMdd') ENDDATE,to_char(A.STARTDATE,'yyyyMMdd') APPLYDATE "
+			sql = "SELECT A.S2TIMSI,A.SERVICECODE,A.STATUS,CASE  WHEN A.STARTDATE< TRUNC(SYSDATE)-"+beforeDay+" THEN to_char(TRUNC(SYSDATE)-"+beforeDay+",'yyyyMMdd') ELSE to_char(A.STARTDATE,'yyyyMMdd') END STARTDATE , to_char(TRUNC(SYSDATE)-1,'yyyyMMdd') ENDDATE,to_char(A.STARTDATE,'yyyyMMdd') APPLYDATE "
 					+ "FROM ADDONSERVICE_N A "
-					+ "WHERE (A.ENDDATE IS NULL OR A.ENDDATE> TRUNC(SYSDATE)-60) AND STATUS ='A'";
+					+ "WHERE (A.ENDDATE IS NULL OR A.ENDDATE> TRUNC(SYSDATE)-"+beforeDay+") AND STATUS ='A'";
 			
 			//20151215 測試指令
-			/*sql = "SELECT A.S2TIMSI,A.SERVICECODE,A.STATUS,CASE  WHEN A.STARTDATE< TRUNC(to_date('2015/11/04','yyyy/MM/dd'))-60 THEN to_char(TRUNC(to_date('2015/11/04','yyyy/MM/dd'))-60,'yyyyMMdd') ELSE to_char(A.STARTDATE,'yyyyMMdd') END STARTDATE , to_char(TRUNC(to_date('2015/11/04','yyyy/MM/dd'))-1,'yyyyMMdd') ENDDATE,to_char(A.STARTDATE,'yyyyMMdd') APPLYDATE "
+			/*sql = "SELECT A.S2TIMSI,A.SERVICECODE,A.STATUS,CASE  WHEN A.STARTDATE< TRUNC(to_date('2015/11/04','yyyy/MM/dd'))-"+beforeDay+" THEN to_char(TRUNC(to_date('2015/11/04','yyyy/MM/dd'))-"+beforeDay+",'yyyyMMdd') ELSE to_char(A.STARTDATE,'yyyyMMdd') END STARTDATE , to_char(TRUNC(to_date('2015/11/04','yyyy/MM/dd'))-1,'yyyyMMdd') ENDDATE,to_char(A.STARTDATE,'yyyyMMdd') APPLYDATE "
 					+ "FROM ADDONSERVICE_N A "
-					+ "WHERE (A.ENDDATE IS NULL OR A.ENDDATE> TRUNC(to_date('2015/11/04','yyyy/MM/dd'))-60) AND STATUS ='A' AND A.STARTDATE<TO_DATE('2015/11/04','yyyy/MM/dd')";*/
+					+ "WHERE (A.ENDDATE IS NULL OR A.ENDDATE> TRUNC(to_date('2015/11/04','yyyy/MM/dd'))-"+beforeDay+") AND STATUS ='A' AND A.STARTDATE<TO_DATE('2015/11/04','yyyy/MM/dd')";*/
 
 			rs = st.executeQuery(sql);
 			logger.info("select status A :"+sql);
@@ -180,25 +196,28 @@ public class AddonService {
 			while(rs.next()){
 				createFile(rs.getString("S2TIMSI"),rs.getString("SERVICECODE"),rs.getString("STATUS"),rs.getString("STARTDATE"),rs.getString("ENDDATE"),rs.getString("APPLYDATE"));
 			}
-			
+			cA = cCreate;
+			logger.info("Created A "+cA);
 			rs.close();
 			rs=null;
 
 			//select D
-			sql = "SELECT A.S2TIMSI,A.SERVICECODE,A.STATUS, to_char(TRUNC(SYSDATE)-60,'yyyyMMdd') STARTDATE , to_char(A.ENDDATE,'yyyyMMdd') ENDDATE,to_char(A.STARTDATE,'yyyyMMdd') APPLYDATE "
+			sql = "SELECT A.S2TIMSI,A.SERVICECODE,A.STATUS, to_char(TRUNC(SYSDATE)-"+beforeDay+",'yyyyMMdd') STARTDATE , to_char(A.ENDDATE,'yyyyMMdd') ENDDATE,to_char(A.STARTDATE,'yyyyMMdd') APPLYDATE "
 					+ "FROM ADDONSERVICE_N A "
-					+ "WHERE (A.ENDDATE IS NULL OR A.ENDDATE>= TRUNC(SYSDATE)-60) AND STATUS ='D'";
+					+ "WHERE (A.ENDDATE IS NULL OR A.ENDDATE>= TRUNC(SYSDATE)-"+beforeDay+") AND STATUS ='D'";
 			
 			//20151215 測試指令
-			/*sql = "SELECT A.S2TIMSI,A.SERVICECODE,A.STATUS, to_char(TRUNC(to_date('2015/11/04','yyyy/MM/dd'))-60,'yyyyMMdd') STARTDATE , to_char(A.ENDDATE,'yyyyMMdd') ENDDATE,to_char(A.STARTDATE,'yyyyMMdd') APPLYDATE "
+			/*sql = "SELECT A.S2TIMSI,A.SERVICECODE,A.STATUS, to_char(TRUNC(to_date('2015/11/04','yyyy/MM/dd'))-"+beforeDay+",'yyyyMMdd') STARTDATE , to_char(A.ENDDATE,'yyyyMMdd') ENDDATE,to_char(A.STARTDATE,'yyyyMMdd') APPLYDATE "
 					+ "FROM ADDONSERVICE_N A "
-					+ "WHERE (A.ENDDATE IS NULL OR A.ENDDATE> TRUNC(to_date('2015/11/04','yyyy/MM/dd'))-60) AND STATUS ='D' AND A.STARTDATE<TO_DATE('2015/11/04','yyyy/MM/dd')";*/
+					+ "WHERE (A.ENDDATE IS NULL OR A.ENDDATE> TRUNC(to_date('2015/11/04','yyyy/MM/dd'))-"+beforeDay+") AND STATUS ='D' AND A.STARTDATE<TO_DATE('2015/11/04','yyyy/MM/dd')";*/
 			rs = st.executeQuery(sql);
 			logger.info("select status D :"+sql);
 			
 			while(rs.next()){
 				createFile(rs.getString("S2TIMSI"),rs.getString("SERVICECODE"),rs.getString("STATUS"),rs.getString("STARTDATE"),rs.getString("ENDDATE"),rs.getString("APPLYDATE"));
 			}
+			cD = cCreate - cA;
+			logger.info("Created D "+cD);
 		} catch (Exception e) {
 			ErrorHandle("Select error:",e);
 		}finally{
@@ -371,9 +390,11 @@ public class AddonService {
 		try{
 			Process p = Runtime.getRuntime().exec (cmd);
 			p.waitFor();
-			System.out.println("send mail cmd:"+cmd[0]+" "+cmd[1]+" "+cmd[2]);
+			if(logger!=null)
+				logger.info("send mail cmd:"+cmd[0]+"\n"+cmd[1]+"\n"+cmd[2]);
 		}catch (Exception e){
-			System.out.println("send mail fail:"+msg);
+			if(logger!=null)
+				logger.error("send mail fail:"+msg);
 		}
 	}
 }
