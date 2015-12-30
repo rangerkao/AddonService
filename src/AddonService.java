@@ -26,8 +26,10 @@ public class AddonService {
 
 	static Logger logger;
 	
+	static String mails="";
 	static String sql;
 	static String path;
+	static String tempFileDir;
 	static SimpleDateFormat sdf = new SimpleDateFormat("HHmm");
 	static SimpleDateFormat sdf2 = new SimpleDateFormat("yyyyMMdd");
 	static long waitingTime = 60*1000;
@@ -36,7 +38,10 @@ public class AddonService {
 	static int cD = 0;
 	static int cCreate = 0;
 	static int cCheck = 0;
+	static int preCount = 0;
+	static int toleration = 15; //%
 	static int beforeDay = 60;
+	static int realNumber = 0;
 	
 	public static void main(String[] args){
 
@@ -53,18 +58,15 @@ public class AddonService {
 		//path="/CDR/script/tool/GPRS_flatrate/AddonServerProgramTest";
 		path="/CDR/script/tool/GPRS_flatrate/inputfile";
 		//path="C:/Users/ranger.kao/Desktop/1104Addon";
-		String tempFileDir="";
-		
-		if(tempFileDir!=null&&"".equals(tempFileDir))
-			path+="/"+tempFileDir;
-		
+		tempFileDir="/temp";
+
 		logger.info("File Path:"+path);
 		
 		boolean exit=false;
 		
 		//20151105調整by參數數量決定執行時間，無參數則為立即性一次啟動
 		if(args.length==0){
-			proccess();
+				proccess();
 		}else{
 			String runTime = args[0];
 			
@@ -91,17 +93,25 @@ public class AddonService {
 	}
 	
 	public static void proccess(){
+		mails = "";
 		logger.info("Proccess start:");
 		try {
 			//確認目標資料夾內容
 			checkFile();
+			//新建暫存資料夾
+			newFolder(path+tempFileDir);
 			//撈取資料
 			selectData();
 			//確認資料數量
 			reCheckFile();
+			
+			
 		} catch (Exception e) {
 			ErrorHandle("",e);
 			return;
+		}finally{
+			//刪除暫存資料夾
+			delFilesinFolder(path+tempFileDir,true);
 		}
 		logger.info("Proccess end.");
 		Calendar c = Calendar.getInstance();
@@ -110,11 +120,8 @@ public class AddonService {
 		c.set(Calendar.MINUTE, 0);
 		c.set(Calendar.SECOND, 0);
 		
-		String mails = "AddonServer Program Finished at "+new Date()+".\n"
-				+ "Date from "+c.getTime()+"~"+new Date()+".\n"
-				+ "Created status A "+cA+".\n"
-				+ "Created status D "+cD+".\n"
-				+ "Total "+cCreate+".";		
+		mails = "AddonServer Program Finished at "+new Date()+".\n"
+				+ "Date from "+c.getTime()+"~"+new Date()+".\n"+mails;
 		sendMail(mails);
 	}
 
@@ -129,16 +136,39 @@ public class AddonService {
 		//確認路徑的位置類型
 		if(tempDir.isDirectory()){
 			logger.info("is folder!");
+
+			//避免目的地有重複檔案造成錯誤
+			//delFilesinFolder(nFolderPath);
+			
+			File nf = new File(nFolderPath);
+			//避免目的地有重複檔案造成錯誤
+			if(nf.exists()){
+				File [] fl = nf.listFiles();
+				String nfd = path+"/"+new SimpleDateFormat("yyyyMMddHHmmss").format(new Date());
+				newFolder(nfd);
+				for(int i = 0 ; i<fl.length ; i++){
+					File f = fl[i];
+					if(f.getName().indexOf("AddServer")!=-1){
+						//進行搬移動作				
+						if(moveFile(nFolderPath,nfd,f.getName())){
+							//logger.info("move "+f.getName()+" to "+nFolder);
+							cMove += 1;
+						}else{
+							throw new Exception("move "+f.getName()+" from "+path+" to "+nFolderPath+" fail!");
+						}
+					}
+				}
+			}
+				
+			newFolder(nFolderPath);
+			
+			logger.info("Check move file...");
 			//是否含有AddServer的資料
 			File [] fl = tempDir.listFiles();
-
-			logger.info("Check move file...");
 			for(int i = 0 ; i<fl.length ; i++){
 				File f = fl[i];
 				if(f.getName().indexOf("AddServer")!=-1){
-					//進行搬移動作
-					newFolder(nFolderPath);
-				
+					//進行搬移動作				
 					if(moveFile(path,nFolderPath,f.getName())){
 						//logger.info("move "+f.getName()+" to "+nFolder);
 						cMove += 1;
@@ -167,6 +197,7 @@ public class AddonService {
 		cCreate = 0;
 		cA = 0;
 		cD = 0;
+		realNumber = 0;
 		logger.info("Select Data...");
 
 		Connection conn = null;
@@ -180,6 +211,30 @@ public class AddonService {
 				throw new Exception("Connection null");
 			
 			st = conn.createStatement();
+			
+			//20151230 改變成先D再A
+			//select D
+			sql = "SELECT A.S2TIMSI,A.SERVICECODE,A.STATUS, to_char(TRUNC(SYSDATE)-"+beforeDay+",'yyyyMMdd') STARTDATE , to_char(A.ENDDATE,'yyyyMMdd') ENDDATE,to_char(A.STARTDATE,'yyyyMMdd') APPLYDATE "
+					+ "FROM ADDONSERVICE_N A "
+					+ "WHERE (A.ENDDATE IS NULL OR A.ENDDATE>= TRUNC(SYSDATE)-"+beforeDay+") AND STATUS ='D'";
+			
+			//20151215 測試指令
+			/*sql = "SELECT A.S2TIMSI,A.SERVICECODE,A.STATUS, to_char(TRUNC(to_date('2015/11/04','yyyy/MM/dd'))-"+beforeDay+",'yyyyMMdd') STARTDATE , to_char(A.ENDDATE,'yyyyMMdd') ENDDATE,to_char(A.STARTDATE,'yyyyMMdd') APPLYDATE "
+					+ "FROM ADDONSERVICE_N A "
+					+ "WHERE (A.ENDDATE IS NULL OR A.ENDDATE> TRUNC(to_date('2015/11/04','yyyy/MM/dd'))-"+beforeDay+") AND STATUS ='D' AND A.STARTDATE<TO_DATE('2015/11/04','yyyy/MM/dd')";*/
+			rs = st.executeQuery(sql);
+			logger.info("select status D :"+sql);
+			
+			while(rs.next()){
+				createFile(rs.getString("S2TIMSI"),rs.getString("SERVICECODE"),rs.getString("STATUS"),rs.getString("STARTDATE"),rs.getString("ENDDATE"),rs.getString("APPLYDATE"));
+			}
+			cD = cCreate;
+			logger.info("Created D "+cD);
+			
+			rs.close();
+			rs=null;
+			
+			
 			//select A
 			sql = "SELECT A.S2TIMSI,A.SERVICECODE,A.STATUS,CASE  WHEN A.STARTDATE< TRUNC(SYSDATE)-"+beforeDay+" THEN to_char(TRUNC(SYSDATE)-"+beforeDay+",'yyyyMMdd') ELSE to_char(A.STARTDATE,'yyyyMMdd') END STARTDATE , to_char(TRUNC(SYSDATE)-1,'yyyyMMdd') ENDDATE,to_char(A.STARTDATE,'yyyyMMdd') APPLYDATE "
 					+ "FROM ADDONSERVICE_N A "
@@ -196,28 +251,29 @@ public class AddonService {
 			while(rs.next()){
 				createFile(rs.getString("S2TIMSI"),rs.getString("SERVICECODE"),rs.getString("STATUS"),rs.getString("STARTDATE"),rs.getString("ENDDATE"),rs.getString("APPLYDATE"));
 			}
-			cA = cCreate;
+			cA = cCreate - cD;
 			logger.info("Created A "+cA);
+			
+			logger.info("total ceated "+cCreate+" files.");
+			
 			rs.close();
 			rs=null;
-
-			//select D
-			sql = "SELECT A.S2TIMSI,A.SERVICECODE,A.STATUS, to_char(TRUNC(SYSDATE)-"+beforeDay+",'yyyyMMdd') STARTDATE , to_char(A.ENDDATE,'yyyyMMdd') ENDDATE,to_char(A.STARTDATE,'yyyyMMdd') APPLYDATE "
-					+ "FROM ADDONSERVICE_N A "
-					+ "WHERE (A.ENDDATE IS NULL OR A.ENDDATE>= TRUNC(SYSDATE)-"+beforeDay+") AND STATUS ='D'";
 			
-			//20151215 測試指令
-			/*sql = "SELECT A.S2TIMSI,A.SERVICECODE,A.STATUS, to_char(TRUNC(to_date('2015/11/04','yyyy/MM/dd'))-"+beforeDay+",'yyyyMMdd') STARTDATE , to_char(A.ENDDATE,'yyyyMMdd') ENDDATE,to_char(A.STARTDATE,'yyyyMMdd') APPLYDATE "
-					+ "FROM ADDONSERVICE_N A "
-					+ "WHERE (A.ENDDATE IS NULL OR A.ENDDATE> TRUNC(to_date('2015/11/04','yyyy/MM/dd'))-"+beforeDay+") AND STATUS ='D' AND A.STARTDATE<TO_DATE('2015/11/04','yyyy/MM/dd')";*/
+			//select realCreated number
+			sql = "SELECT COUNT(1) CD "
+					+ "FROM ( "
+					+ "			SELECT DISTINCT A.S2TIMSI,A.SERVICECODE,TO_CHAR(A.STARTDATE,'yyyyMMdd') APPLYDATE "
+					+ "			FROM ADDONSERVICE_N A "
+					+ "			WHERE (A.ENDDATE IS NULL OR A.ENDDATE> TRUNC(SYSDATE)-"+beforeDay+"))";
+			
 			rs = st.executeQuery(sql);
-			logger.info("select status D :"+sql);
+			logger.info("select status A :"+sql);
 			
 			while(rs.next()){
-				createFile(rs.getString("S2TIMSI"),rs.getString("SERVICECODE"),rs.getString("STATUS"),rs.getString("STARTDATE"),rs.getString("ENDDATE"),rs.getString("APPLYDATE"));
+				realNumber = rs.getInt("CD");
 			}
-			cD = cCreate - cA;
-			logger.info("Created D "+cD);
+			logger.info("real created Number "+realNumber);
+			
 		} catch (Exception e) {
 			ErrorHandle("Select error:",e);
 		}finally{
@@ -230,32 +286,64 @@ public class AddonService {
 					rs.close();
 			} catch (SQLException e) {
 			}
-			logger.info("total ceated "+cCreate+" files.");
+
+			mails +="Created file number A/D is "+cA+"/"+cD+".\n";
+			mails +="Total ceated "+cCreate+" files.\n";
+			mails +="real ceated "+realNumber+" files.\n";
 		}
 	}
 	public static void reCheckFile() throws Exception{
 		logger.info("reCheck File...");
 		cCheck = 0;
 
-		File tempDir = new File(path);
+		long cSize = 0;
+		long fSize = 0;
+		File tempDir = new File(path+tempFileDir);
 		//確認路徑的位置類型
 		if(tempDir.isDirectory()){
 			logger.info("is folder!");
 			//是否含有AddServer的資料
 			File [] fl = tempDir.listFiles();
-
+			fSize = fl[0].length();
 			logger.info("Check move file...");
 			for(int i = 0 ; i<fl.length ; i++){
 				File f = fl[i];
 				if(f.getName().indexOf("AddServer")!=-1){
 					cCheck +=1;
+					cSize+=f.length();
 				}
 			}
 			logger.info("Have "+cCheck+" files in folder.");
 			
-			if(cCheck!=cCreate)
+			if(cCheck!=cCreate && cCheck!=realNumber)
 				throw new Exception("Created file number not match existed file number!");
 				
+			//確認資料量大小是否正確
+			if(cSize != fSize*realNumber)
+				throw new Exception("Created file size not match!("+cSize+" is not equal to "+fSize+"*"+realNumber+")");
+			
+			logger.info(""+cSize+" is equal to "+fSize+"*"+realNumber+".");
+			mails += ""+cSize+" is equal to "+fSize+"*"+realNumber+".\n";
+			
+			
+			//確認與前次數量差異
+			double diff = Math.abs(preCount-realNumber);
+			double differentiae = diff/realNumber*100;
+			if(preCount!=0 && differentiae>toleration)
+				throw new Exception("(("+preCount+"-"+realNumber+")/"+realNumber+")*100 > "+toleration+"(%). Innomal number differentiae.");
+			
+			logger.info("(("+preCount+"-"+realNumber+")/"+realNumber+")*100 < "+toleration+"(%) is in normal range.");
+			mails += "(("+preCount+"-"+realNumber+")/"+realNumber+")*100 < "+toleration+"(%) is in normal range.\n";
+			preCount = realNumber;
+			
+			//將檔案搬回正式資料夾
+			for(int i = 0 ; i<fl.length ; i++){
+				File f = fl[i];
+				if(f.getName().indexOf("AddServer")!=-1){
+					moveFile(path+tempFileDir, path,f.getName());
+				}
+			}
+			logger.info("Move Files from "+path+tempFileDir+" to "+path+".");
 				
 		}else if(tempDir.isFile()){
 			logger.info("is file!");
@@ -264,7 +352,6 @@ public class AddonService {
 			logger.info("unknowm!");
 			throw new Exception("Dir is Not correct!");
 		}
-		
 	}
 	public static void createFile(String IMSI,String SERVICECODE,String STATUS,String STARTDATE,String ENDDATE,String APPLYDATE){
 
@@ -272,7 +359,45 @@ public class AddonService {
 		String fileCont = IMSI+" "+SERVICECODE.substring(2)+" "+STARTDATE+" "+ENDDATE;
 				//[IMSI][空格][SX代碼][空格][起始時間][空格][結束時間]
 
-		File f = new File(path+"/"+fileName);
+		FileOutputStream out = null;
+		try {
+			out = new FileOutputStream(path+tempFileDir+"/"+fileName);
+			out.write(fileCont.getBytes("UTF-8"));
+			cCreate += 1;
+		} catch (FileNotFoundException e) {
+			ErrorHandle("Create File error",e);
+		} catch (UnsupportedEncodingException e) {
+			ErrorHandle("Create File error",e);
+		} catch (IOException e) {
+			ErrorHandle("Create File error",e);
+		}finally{	
+			if(out!=null)
+				try {
+					out.close();
+				} catch (IOException e) {
+				}
+		}
+		
+		
+		
+		/*PrintWriter writer = null;
+		try {
+			writer = new PrintWriter(path+tempFileDir+"/"+fileName, "UTF-8");
+			writer.println(fileCont);		
+			cCreate += 1;
+		} catch (FileNotFoundException e) {
+			ErrorHandle("Create File error",e);
+		} catch (UnsupportedEncodingException e) {
+			ErrorHandle("Create File error",e);
+		} catch (IOException e) {
+			ErrorHandle("Create File error",e);
+		}finally{	
+			if(writer!=null)
+				writer.close();
+		}*/
+		
+		
+		/*File f = new File(path+tempFileDir+"/"+fileName);
 		BufferedWriter fw = null;
 		try {
 			f.createNewFile();
@@ -291,7 +416,7 @@ public class AddonService {
 					fw.close();
 			} catch (IOException e) {
 			}
-		}
+		}*/
 	}
 	public static void newFolder(String folderPath) {
 		
@@ -303,6 +428,31 @@ public class AddonService {
 			}
 		}catch(Exception e) {
 			ErrorHandle("Create new folder error",e);
+		}
+	}
+	
+	public static void delFilesinFolder(String folderPath) {
+		delFilesinFolder(folderPath,false);
+	}
+	
+	public static void delFilesinFolder(String folderPath,boolean delfolder) {
+		int count = 0;
+		try {
+			File myFilePath = new File(folderPath);
+			if (myFilePath.exists()) {
+				logger.info("Delete File in "+folderPath);
+				File f[] = myFilePath.listFiles();
+				for(int i=0;i<f.length;i++ ){
+					f[i].delete();
+					count ++;
+				}
+				logger.info("Deleted "+count+" files.");
+			}
+			if(delfolder)
+				myFilePath.delete();
+			
+		}catch(Exception e) {
+			ErrorHandle("Delete nfolder error",e);
 		}
 	}
 
@@ -378,7 +528,7 @@ public class AddonService {
 			logger.error(e);
 		}
 		
-		String mailReceiver = "Douglas.Chuang@sim2travel.com,ranger.kao@sim2travel.com";
+		String mailReceiver = "Douglas.Chuang@sim2travel.com,yvonne.lin@sim2travel.com,ranger.kao@sim2travel.com";
 		
 		msg=msg+" from location "+ip;			
 		
