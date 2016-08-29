@@ -24,6 +24,9 @@ import org.apache.log4j.PropertyConfigurator;
 
 public class AddonService {
 
+	static boolean testMode = false;
+	
+	
 	static Logger logger;
 	
 	static String mails="";
@@ -36,6 +39,7 @@ public class AddonService {
 	static int cMove = 0;
 	static int cA = 0;
 	static int cD = 0;
+	static int cU = 0;
 	static int cCreate = 0;
 	static int cCheck = 0;
 	static int preCount = 0;
@@ -56,8 +60,11 @@ public class AddonService {
 		//設定目的路徑
 		//path=System.getProperty("user.dir"); 
 		//path="/CDR/script/tool/GPRS_flatrate/AddonServerProgramTest";
-		path="/CDR/script/tool/GPRS_flatrate/inputfile";
-		//path="C:/Users/ranger.kao/Desktop/1104Addon";
+		if(testMode){
+			path="C:/Users/ranger.kao/Desktop/1104Addon";
+		}else{
+			path="/CDR/script/tool/GPRS_flatrate/inputfile";
+		}
 		tempFileDir="/temp";
 
 		logger.info("File Path:"+path);
@@ -197,6 +204,7 @@ public class AddonService {
 		cCreate = 0;
 		cA = 0;
 		cD = 0;
+		cU = 0;
 		realNumber = 0;
 		logger.info("Select Data...");
 
@@ -214,7 +222,7 @@ public class AddonService {
 			
 			//20151230 改變成先D再A
 			//select D
-			sql = "SELECT A.S2TIMSI,A.SERVICECODE,A.STATUS, to_char(TRUNC(SYSDATE)-"+beforeDay+",'yyyyMMdd') STARTDATE , to_char(A.ENDDATE,'yyyyMMdd') ENDDATE,to_char(A.STARTDATE,'yyyyMMdd') APPLYDATE "
+			sql = "SELECT A.S2TIMSI,A.SERVICECODE,A.STATUS,CASE  WHEN A.STARTDATE< TRUNC(SYSDATE)-"+beforeDay+" THEN to_char(TRUNC(SYSDATE)-"+beforeDay+",'yyyyMMdd') ELSE to_char(A.STARTDATE,'yyyyMMdd') END STARTDATE , CASE WHEN A.ENDDATE IS NULL THEN to_char(TRUNC(SYSDATE)-1,'yyyyMMdd') ELSE to_char(A.ENDDATE,'yyyyMMdd') END ENDDATE,to_char(A.STARTDATE,'yyyyMMdd') APPLYDATE "
 					+ "FROM ADDONSERVICE_N A "
 					+ "WHERE (A.ENDDATE IS NULL OR A.ENDDATE>= TRUNC(SYSDATE)-"+beforeDay+") AND STATUS ='D'";
 			
@@ -226,7 +234,7 @@ public class AddonService {
 			logger.info("select status D :"+sql);
 			
 			while(rs.next()){
-				createFile(rs.getString("S2TIMSI"),rs.getString("SERVICECODE"),rs.getString("STATUS"),rs.getString("STARTDATE"),rs.getString("ENDDATE"),rs.getString("APPLYDATE"));
+				createFile(rs.getString("S2TIMSI"),rs.getString("SERVICECODE"),rs.getString("STARTDATE"),rs.getString("ENDDATE"),rs.getString("APPLYDATE"));
 			}
 			cD = cCreate;
 			logger.info("Created D "+cD);
@@ -236,7 +244,7 @@ public class AddonService {
 			
 			
 			//select A
-			sql = "SELECT A.S2TIMSI,A.SERVICECODE,A.STATUS,CASE  WHEN A.STARTDATE< TRUNC(SYSDATE)-"+beforeDay+" THEN to_char(TRUNC(SYSDATE)-"+beforeDay+",'yyyyMMdd') ELSE to_char(A.STARTDATE,'yyyyMMdd') END STARTDATE , to_char(TRUNC(SYSDATE)-1,'yyyyMMdd') ENDDATE,to_char(A.STARTDATE,'yyyyMMdd') APPLYDATE "
+			sql = "SELECT A.S2TIMSI,A.SERVICECODE,A.STATUS,CASE  WHEN A.STARTDATE< TRUNC(SYSDATE)-"+beforeDay+" THEN to_char(TRUNC(SYSDATE)-"+beforeDay+",'yyyyMMdd') ELSE to_char(A.STARTDATE,'yyyyMMdd') END STARTDATE , CASE WHEN A.ENDDATE IS NULL THEN to_char(TRUNC(SYSDATE)-1,'yyyyMMdd') ELSE to_char(A.ENDDATE,'yyyyMMdd') END ENDDATE,to_char(A.STARTDATE,'yyyyMMdd') APPLYDATE "
 					+ "FROM ADDONSERVICE_N A "
 					+ "WHERE (A.ENDDATE IS NULL OR A.ENDDATE> TRUNC(SYSDATE)-"+beforeDay+") AND STATUS ='A'";
 			
@@ -249,10 +257,29 @@ public class AddonService {
 			logger.info("select status A :"+sql);
 			
 			while(rs.next()){
-				createFile(rs.getString("S2TIMSI"),rs.getString("SERVICECODE"),rs.getString("STATUS"),rs.getString("STARTDATE"),rs.getString("ENDDATE"),rs.getString("APPLYDATE"));
+				createFile(rs.getString("S2TIMSI"),rs.getString("SERVICECODE"),rs.getString("STARTDATE"),rs.getString("ENDDATE"),rs.getString("APPLYDATE"));
 			}
 			cA = cCreate - cD;
 			logger.info("Created A "+cA);
+
+			rs.close();
+			rs=null;
+			
+			//20160824
+			//select 美國流量包
+			sql = "select A.IMSI S2TIMSI,'SX100' SERVICECODE,CASE  WHEN A.START_DATE< to_char(TRUNC(SYSDATE)-"+beforeDay+",'yyyyMMdd') THEN to_char(TRUNC(SYSDATE)-"+beforeDay+",'yyyyMMdd') ELSE A.START_DATE END STARTDATE , CASE WHEN A.END_DATE IS NULL THEN to_char(TRUNC(SYSDATE)-1,'yyyyMMdd') ELSE A.END_DATE END ENDDATE,A.START_DATE APPLYDATE "
+					+ "from HUR_VOLUME_POCKET A "
+					+ "where (A.END_DATE IS NULL OR A.END_DATE> to_char(TRUNC(SYSDATE)-"+beforeDay+",'yyyyMMdd')) AND A.TYPE=0 AND A.CANCEL_TIME IS NULL ";
+			
+
+			rs = st.executeQuery(sql);
+			logger.info("select status 美國上網包 :"+sql);
+			
+			while(rs.next()){
+				createFile(rs.getString("S2TIMSI"),rs.getString("SERVICECODE"),rs.getString("STARTDATE"),rs.getString("ENDDATE"),rs.getString("APPLYDATE"));
+			}
+			cU = cCreate - cD - cA;
+			logger.info("Created 美國上網包 "+cA);
 			
 			logger.info("total ceated "+cCreate+" files.");
 			
@@ -267,11 +294,26 @@ public class AddonService {
 					+ "			WHERE (A.ENDDATE IS NULL OR A.ENDDATE> TRUNC(SYSDATE)-"+beforeDay+"))";
 			
 			rs = st.executeQuery(sql);
-			logger.info("select status A :"+sql);
+			logger.info("select status A & D :"+sql);
 			
 			while(rs.next()){
 				realNumber = rs.getInt("CD");
 			}
+			
+			rs.close();
+			rs=null;
+			
+			//select realCreated number
+			sql = "select count(1) CD from HUR_VOLUME_POCKET A where A.CANCEL_TIME is null and A.TYPE = 0";
+			
+			rs = st.executeQuery(sql);
+			logger.info("select US pocket:"+sql);
+			
+			while(rs.next()){
+				realNumber += rs.getInt("CD");
+			}
+			
+			
 			logger.info("real created Number "+realNumber);
 			
 		} catch (Exception e) {
@@ -287,7 +329,8 @@ public class AddonService {
 			} catch (SQLException e) {
 			}
 
-			mails +="Created file number A/D is "+cA+"/"+cD+".\n";
+			mails +="Created file number of A/D is "+cA+"/"+cD+".\n";
+			mails +="Created file number of US pocket is "+cU+".\n";
 			mails +="Total ceated "+cCreate+" files.\n";
 			mails +="real ceated "+realNumber+" files.\n";
 		}
@@ -318,8 +361,9 @@ public class AddonService {
 			if(cCheck!=cCreate && cCheck!=realNumber)
 				throw new Exception("Created file number not match existed file number!");
 				
+			//20160824 cancel
 			//確認資料量大小是否正確
-			if(cSize != fSize*realNumber)
+			if(cSize != fSize*(realNumber))
 				throw new Exception("Created file size not match!("+cSize+" is not equal to "+fSize+"*"+realNumber+")");
 			
 			logger.info(""+cSize+" is equal to "+fSize+"*"+realNumber+".");
@@ -353,7 +397,7 @@ public class AddonService {
 			throw new Exception("Dir is Not correct!");
 		}
 	}
-	public static void createFile(String IMSI,String SERVICECODE,String STATUS,String STARTDATE,String ENDDATE,String APPLYDATE){
+	public static void createFile(String IMSI,String SERVICECODE,String STARTDATE,String ENDDATE,String APPLYDATE){
 
 		String fileName = "AddServer."+SERVICECODE.substring(2)+"."+IMSI+"."+APPLYDATE+".txt";
 		String fileCont = IMSI+" "+SERVICECODE.substring(2)+" "+STARTDATE+" "+ENDDATE;
@@ -465,8 +509,14 @@ public class AddonService {
 		//conn=tool.connDB(logger, DriverClass, URL, UserName, PassWord);
 		Connection conn = null;
 
-		String url="jdbc:oracle:thin:@10.42.1.80:1521:s2tbs";
-		conn=connDB("oracle.jdbc.driver.OracleDriver", url,"s2tbsadm","s2tbsadm");
+		String url = null;
+		if(testMode){
+			url="jdbc:oracle:thin:@10.42.1.101:1521:S2TBSDEV";
+			conn=connDB("oracle.jdbc.driver.OracleDriver", url,"foyadev","foyadev");
+		}else{
+			url="jdbc:oracle:thin:@10.42.1.80:1521:s2tbs";
+			conn=connDB("oracle.jdbc.driver.OracleDriver", url,"s2tbsadm","s2tbsadm");
+		}		
 		logger.info("Connect to "+url);
 	
 		return conn;
