@@ -17,7 +17,9 @@ import java.sql.Statement;
 import java.text.SimpleDateFormat;
 import java.util.Calendar;
 import java.util.Date;
+import java.util.HashSet;
 import java.util.Properties;
+import java.util.Set;
 
 import org.apache.log4j.Logger;
 import org.apache.log4j.PropertyConfigurator;
@@ -61,7 +63,7 @@ public class AddonService {
 		//path=System.getProperty("user.dir"); 
 		//path="/CDR/script/tool/GPRS_flatrate/AddonServerProgramTest";
 		if(testMode){
-			path="C:/Users/ranger.kao/Desktop/1104Addon";
+			path="C:/Users/ranger.kao/Desktop/Addon";
 		}else{
 			path="/CDR/script/tool/GPRS_flatrate/inputfile";
 		}
@@ -201,6 +203,7 @@ public class AddonService {
 	}
 	
 	public static void selectData(){
+		
 		cCreate = 0;
 		cA = 0;
 		cD = 0;
@@ -304,7 +307,8 @@ public class AddonService {
 			rs=null;
 			
 			//select realCreated number
-			sql = "select count(1) CD from HUR_VOLUME_POCKET A where A.CANCEL_TIME is null and A.TYPE = 0";
+			sql = "select count(1) CD from HUR_VOLUME_POCKET A "
+			+ "where (A.END_DATE IS NULL OR A.END_DATE> to_char(TRUNC(SYSDATE)-"+beforeDay+",'yyyyMMdd')) AND A.TYPE=0 AND A.CANCEL_TIME IS NULL ";
 			
 			rs = st.executeQuery(sql);
 			logger.info("select US pocket:"+sql);
@@ -400,14 +404,16 @@ public class AddonService {
 	public static void createFile(String IMSI,String SERVICECODE,String STARTDATE,String ENDDATE,String APPLYDATE){
 
 		String fileName = "AddServer."+SERVICECODE.substring(2)+"."+IMSI+"."+APPLYDATE+".txt";
+		
 		String fileCont = IMSI+" "+SERVICECODE.substring(2)+" "+STARTDATE+" "+ENDDATE;
 				//[IMSI][空格][SX代碼][空格][起始時間][空格][結束時間]
-
+		
 		FileOutputStream out = null;
 		try {
 			out = new FileOutputStream(path+tempFileDir+"/"+fileName);
 			out.write(fileCont.getBytes("UTF-8"));
 			cCreate += 1;
+			
 		} catch (FileNotFoundException e) {
 			ErrorHandle("Create File error",e);
 		} catch (UnsupportedEncodingException e) {
