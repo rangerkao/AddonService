@@ -227,7 +227,7 @@ public class AddonService {
 			//select D
 			sql = "SELECT A.S2TIMSI,A.SERVICECODE,A.STATUS,CASE  WHEN A.STARTDATE< TRUNC(SYSDATE)-"+beforeDay+" THEN to_char(TRUNC(SYSDATE)-"+beforeDay+",'yyyyMMdd') ELSE to_char(A.STARTDATE,'yyyyMMdd') END STARTDATE , CASE WHEN A.ENDDATE IS NULL THEN to_char(TRUNC(SYSDATE)-1,'yyyyMMdd') ELSE to_char(A.ENDDATE,'yyyyMMdd') END ENDDATE,to_char(A.STARTDATE,'yyyyMMdd') APPLYDATE "
 					+ "FROM ADDONSERVICE_N A "
-					+ "WHERE (A.ENDDATE IS NULL OR A.ENDDATE>= TRUNC(SYSDATE)-"+beforeDay+") AND STATUS ='D'";
+					+ "WHERE (servicecode = 'SX001' or servicecode =  'SX002') AND (A.ENDDATE IS NULL OR A.ENDDATE>= TRUNC(SYSDATE)-"+beforeDay+") AND STATUS ='D' ";
 			
 			//20151215 測試指令
 			/*sql = "SELECT A.S2TIMSI,A.SERVICECODE,A.STATUS, to_char(TRUNC(to_date('2015/11/04','yyyy/MM/dd'))-"+beforeDay+",'yyyyMMdd') STARTDATE , to_char(A.ENDDATE,'yyyyMMdd') ENDDATE,to_char(A.STARTDATE,'yyyyMMdd') APPLYDATE "
@@ -249,7 +249,7 @@ public class AddonService {
 			//select A
 			sql = "SELECT A.S2TIMSI,A.SERVICECODE,A.STATUS,CASE  WHEN A.STARTDATE< TRUNC(SYSDATE)-"+beforeDay+" THEN to_char(TRUNC(SYSDATE)-"+beforeDay+",'yyyyMMdd') ELSE to_char(A.STARTDATE,'yyyyMMdd') END STARTDATE , CASE WHEN A.ENDDATE IS NULL THEN to_char(TRUNC(SYSDATE)-1,'yyyyMMdd') ELSE to_char(A.ENDDATE,'yyyyMMdd') END ENDDATE,to_char(A.STARTDATE,'yyyyMMdd') APPLYDATE "
 					+ "FROM ADDONSERVICE_N A "
-					+ "WHERE (A.ENDDATE IS NULL OR A.ENDDATE> TRUNC(SYSDATE)-"+beforeDay+") AND STATUS ='A'";
+					+ "WHERE (servicecode = 'SX001' or servicecode =  'SX002') AND (A.ENDDATE IS NULL OR A.ENDDATE> TRUNC(SYSDATE)-"+beforeDay+") AND STATUS ='A'";
 			
 			//20151215 測試指令
 			/*sql = "SELECT A.S2TIMSI,A.SERVICECODE,A.STATUS,CASE  WHEN A.STARTDATE< TRUNC(to_date('2015/11/04','yyyy/MM/dd'))-"+beforeDay+" THEN to_char(TRUNC(to_date('2015/11/04','yyyy/MM/dd'))-"+beforeDay+",'yyyyMMdd') ELSE to_char(A.STARTDATE,'yyyyMMdd') END STARTDATE , to_char(TRUNC(to_date('2015/11/04','yyyy/MM/dd'))-1,'yyyyMMdd') ENDDATE,to_char(A.STARTDATE,'yyyyMMdd') APPLYDATE "
@@ -267,10 +267,10 @@ public class AddonService {
 
 			rs.close();
 			rs=null;
-			
+			//20170630 mod 新版美國流量包 代號為101 (與舊號碼100區分)
 			//20160824
 			//select 美國流量包
-			sql = "select A.IMSI S2TIMSI,'SX100' SERVICECODE,CASE  WHEN A.START_DATE< to_char(TRUNC(SYSDATE)-"+beforeDay+",'yyyyMMdd') THEN to_char(TRUNC(SYSDATE)-"+beforeDay+",'yyyyMMdd') ELSE A.START_DATE END STARTDATE , CASE WHEN A.END_DATE IS NULL THEN to_char(TRUNC(SYSDATE)-1,'yyyyMMdd') ELSE A.END_DATE END ENDDATE,A.START_DATE APPLYDATE "
+			sql = "select A.IMSI S2TIMSI,'SX101' SERVICECODE,CASE  WHEN A.START_DATE< to_char(TRUNC(SYSDATE)-"+beforeDay+",'yyyyMMdd') THEN to_char(TRUNC(SYSDATE)-"+beforeDay+",'yyyyMMdd') ELSE A.START_DATE END STARTDATE , CASE WHEN A.END_DATE IS NULL THEN to_char(TRUNC(SYSDATE)-1,'yyyyMMdd') ELSE A.END_DATE END ENDDATE,A.START_DATE APPLYDATE "
 					+ "from HUR_VOLUME_POCKET A "
 					+ "where (A.END_DATE IS NULL OR A.END_DATE> to_char(TRUNC(SYSDATE)-"+beforeDay+",'yyyyMMdd')) AND A.TYPE=0 AND A.CANCEL_TIME IS NULL ";
 			
@@ -294,7 +294,7 @@ public class AddonService {
 					+ "FROM ( "
 					+ "			SELECT DISTINCT A.S2TIMSI,A.SERVICECODE,TO_CHAR(A.STARTDATE,'yyyyMMdd') APPLYDATE "
 					+ "			FROM ADDONSERVICE_N A "
-					+ "			WHERE (A.ENDDATE IS NULL OR A.ENDDATE> TRUNC(SYSDATE)-"+beforeDay+"))";
+					+ "			WHERE (servicecode = 'SX001' or servicecode =  'SX002') AND (A.ENDDATE IS NULL OR A.ENDDATE> TRUNC(SYSDATE)-"+beforeDay+"))";
 			
 			rs = st.executeQuery(sql);
 			logger.info("select status A & D :"+sql);
