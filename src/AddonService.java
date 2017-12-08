@@ -520,7 +520,7 @@ public class AddonService {
 			url="jdbc:oracle:thin:@10.42.1.101:1521:S2TBSDEV";
 			conn=connDB("oracle.jdbc.driver.OracleDriver", url,"foyadev","foyadev");
 		}else{
-			url="jdbc:oracle:thin:@10.42.1.80:1521:s2tbs";
+			url="jdbc:oracle:thin:@10.42.1.80:1521:s2tbs1";
 			conn=connDB("oracle.jdbc.driver.OracleDriver", url,"s2tbsadm","s2tbsadm");
 		}		
 		logger.info("Connect to "+url);
